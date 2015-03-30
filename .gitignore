@@ -1,32 +1,178 @@
-# Object files
-*.o
-*.ko
-*.obj
-*.elf
+%{
+	void yyerror (char *s);
+	#include <stdio.h>
+	#include <stdlib.h>
+	int symbols[52];
+	int symbolVal(char symbol);
+	void updateSymbolVal(char symbol, int val);
+	char Table_var[][];
+	int conTab;
+%}
 
-# Precompiled Headers
-*.gch
-*.pch
+%union {int integer; char id; int byte;}
+%start PROGRAM
 
-# Libraries
-*.lib
-*.a
-*.la
-*.lo
+%token entity
+%token is
+%token port
+%token in
+%token out
+%token signal
+%token bit
+%token vector
+%token to
+%token end
+%token architecture
+%token of
+%token begin
+%token IF
+%token THEN
+%token ELSE
+%token CASE
+%token WHEN
+%token BREAK
+%token OTHER
 
-# Shared objects (inc. Windows DLLs)
-*.dll
-*.so
-*.so.*
-*.dylib
+%token <integer> CTE_INT
+%token <id> ID
+%token <byte> BYTE
 
-# Executables
-*.exe
-*.out
-*.app
-*.i*86
-*.x86_64
-*.hex
+%type <integer> VARS VAR1 VAR EXPRESION EXP LOGIC LOGIC1 TERMINO TERMINO1 FACTOR FACTOR1 VAR_CTE
+%type <id> BLOQUE INOUT TIPO ESTATUTO1 ESTATUTO ASIGNACION CONDIF CONDCASE CONDCASE1
 
-# Debug files
-*.dSYM/
+%%
+
+PROGRAM		:VARS BLOQUE									{;}
+			;
+			
+VARS		:entity ID is port '(' VAR1 ')' end ID ';'		{;}
+			;
+
+VAR1		:VAR											{;}
+			|VAR VAR1										{;}
+			;
+			
+VAR			:ID ':' INOUT TIPO ';'							{Table_var[Contab][0]=$1;}
+			;
+			
+INOUT		:in												{Table_var[Contab][1]=$1;}
+			|out											{Table_var[Contab][1]=$1;}
+			|signal											{Table_var[Contab][1]=$1;}
+			;
+			
+TIPO		:vector '(' CTE_INT ')'							{Table_var[Contab][2]=$1; Contab=Contab+1;}
+			|bit											{Table_var[Contab][2]=$1; Contab=Contab+1;}
+			;
+			
+BLOQUE		:architecture ID of ID is begin ESTATUTO1 end ID ';'	{;}
+			;
+			
+ESTATUTO1	:ESTATUTO										{;}
+			|ESTATUTO ESTATUTO1								{;}
+			;
+		
+ESTATUTO	:ASIGNACION										{;}
+			|CONDIF											{;}
+			|CONDCASE										{;}
+			;
+
+ASIGNACION	:ID '=' EXP ';'									{updateSymbolVal($1,$3);}
+			;
+			
+CONDIF		:IF '(' EXPRESION ')' THEN ESTATUTO1 end IF ';'						{;}
+			|IF '(' EXPRESION ')' THEN ESTATUTO1 ELSE ESTATUTO1 end IF ';'		{;}
+			;
+			
+CONDCASE	:CASE ID is CONDCASE1 end CASE ';'				{;}
+			;
+			
+CONDCASE1	:WHEN bit ':' ESTATUTO1 BREAK ';'				{;}
+			|WHEN vector ':' ESTATUTO1 BREAK ';'			{;}
+			|WHEN OTHER ':' ESTATUTO1 BREAK ';'				{;}
+			|WHEN bit ':' ESTATUTO1 BREAK ';' CONDCASE1		{;}
+			|WHEN vector ':' ESTATUTO1 BREAK ';' CONDCASE1	{;}
+			|WHEN OTHER ':' ESTATUTO1 BREAK ';' CONDCASE1	{;}
+			;
+			
+EXPRESION	:EXP											{;}
+			|EXP '==' EXP									{$$ = $1 == $3;}
+			|EXP '!=' EXP									{$$ = $1 != $3;}
+			|EXP '<' EXP									{$$ = $1 < $3;}
+			|EXP '>' EXP									{$$ = $1 > $3;}
+			;
+			
+EXP			:LOGIC1											{;}
+			;
+			
+LOGIC1		:LOGIC											{;}
+			|'!' LOGIC										{$$ = ~$2; printf("negar\n");}
+			|LOGIC '&' LOGIC1								{$$ = $1 & $3; printf("and\n");}
+			|LOGIC '|' LOGIC1								{$$ = $1 | $3;}
+			|LOGIC '^' LOGIC1								{$$ = $1 ^ $3;}
+			;
+			
+LOGIC		:TERMINO1										{;}
+			;
+			
+TERMINO1	:TERMINO										{;}
+			|TERMINO '+' TERMINO1							{$$ = $1 + $3;printf("suma\n");}
+			|TERMINO '-' TERMINO1							{$$ = $1 - $3;}
+			;
+			
+TERMINO		:FACTOR1										{;}
+			;
+			
+FACTOR1		:FACTOR											{;}
+			|FACTOR '<<' FACTOR1							{$$ = $1 << $3;}
+			|FACTOR '>>' FACTOR1							{$$ = $1 >> $3;}
+			;
+			
+FACTOR		:'(' EXP ')'									{$$ = $2;}
+			|VAR_CTE										{;}
+			;
+			
+VAR_CTE		:ID												{;}
+			|bit											{;}
+			|vector											{;}
+			;
+
+%%
+
+int computeSymbolIndex(char token)
+{
+	int idx = -1;
+	if(islower(token))
+	{
+		idx = token - 'a' + 26;
+	}
+	else if(isupper(token))
+	{
+		idx = token - 'A';
+	}
+	return idx;
+}
+
+int symbolVal(char symbol)
+{
+	int bucket = computeSymbolIndex(symbol);
+	return symbols[bucket];
+}
+
+void updateSymbolVal(char symbol, int val)
+{
+	int bucket = computeSymbolIndex(symbol);
+	symbols[bucket] = val;
+}
+
+int main(void)
+{
+	int i;
+	for(i=0; i<52; i++)
+	{
+		symbols[i] = 0;
+	}
+	
+	return yyparse();
+}
+
+void yyerror (char *s) {printf("%s\n", s);}
